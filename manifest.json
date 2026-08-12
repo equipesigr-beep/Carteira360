@@ -1,0 +1,14 @@
+{
+  "name": "Carteira360 — Painel de Investimentos",
+  "short_name": "Carteira360",
+  "description": "Gestão offline de investimentos, metas, proventos e importação B3.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111c2b",
+  "theme_color": "#111c2b",
+  "lang": "pt-BR",
+  "icons": [
+    {"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
