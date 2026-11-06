@@ -1,0 +1,28 @@
+name: Desbloquear publicacao do Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/desbloquear-pages.yml"
+
+permissions:
+  pages: write
+
+concurrency:
+  group: desbloquear-pages
+  cancel-in-progress: false
+
+jobs:
+  cancelar-publicacao-presa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancelar publicacao antiga do Carteira360
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            repos/equipesigr-beep/Carteira360/pages/deployments/32064344959d96b7c3d42a9eac54dd53758cb173/cancel
