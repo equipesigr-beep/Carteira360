@@ -1,4 +1,4 @@
-const CACHE="carteira360-pwa-email-v3";
+const CACHE="carteira360-pwa-direct-v4";
 const APP=["./","./index.html","./manifest.json","./icon.svg"];
 
 self.addEventListener("install",event=>{
