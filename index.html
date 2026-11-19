@@ -59,6 +59,7 @@ html[data-theme="dark"] .mobile-nav{border-color:var(--line);background:#182331f
 
   .asset-row-actions{display:flex;align-items:center;gap:6px}
 .asset-row-actions .button{min-height:0;padding:7px 9px;font-size:inherit}
+.history-edit{min-height:0;padding:7px 9px;font-size:inherit}
 </style>
 </head>
 <body>
@@ -188,7 +189,11 @@ html[data-theme="dark"] .mobile-nav{border-color:var(--line);background:#182331f
   }
   const kpi=(icon,label,value,detail,tone="")=>'<article class="kpi"><div class="kpi-label"><span class="kpi-icon">'+icon+'</span>'+esc(label)+'</div><strong class="'+tone+'">'+value+'</strong><p>'+detail+'</p></article>';
   const empty=(title,text)=>'<div class="empty"><span class="empty-icon">◇</span><h3>'+esc(title)+'</h3><p>'+esc(text)+'</p></div>';
-  function transactionTable(items){if(!items.length)return empty("Nenhuma movimentação","Adicione uma compra, venda, subscrição ou bonificação.");return '<div class="table-wrap"><table class="table"><thead><tr><th>Data</th><th>Operação</th><th>Ativo</th><th>Quantidade</th><th>Preço unitário</th><th>Taxas</th><th>Montante</th><th>Resultado realizado</th></tr></thead><tbody>'+items.map(item=>'<tr><td>'+dateLabel(item.date)+'</td><td><span class="op-tag '+(item.operation==="VENDA"?"sale":"buy")+'">'+esc(item.operation)+'</span></td><td><strong>'+esc(item.ticker)+'</strong></td><td>'+num(item.quantity)+'</td><td>'+money(item.unitPrice)+'</td><td>'+money(item.fees)+'</td><td><strong>'+money(Number(item.quantity)*Number(item.unitPrice)+Number(item.fees||0))+'</strong></td><td class="'+(Number(item.realizedResult||0)>=0?"positive":"negative")+'">'+(item.operation==="VENDA"?money(item.realizedResult||0):"—")+'</td></tr>').join("")+'</tbody></table></div>'}
+  function historyEditButton(kind,item){
+    return '<button type="button" class="button secondary history-edit" data-action="edit-history" data-kind="'+kind+'" data-id="'+esc(item.id)+'" aria-label="Editar '+esc(item.ticker)+'">Editar</button>';
+  }
+  const historyRecords=kind=>kind==="transaction"?state.transactions:kind==="income"?state.income:state.futureIncome;
+  function transactionTable(items,editable=false){if(!items.length)return empty("Nenhuma movimentação","Adicione uma compra, venda, subscrição ou bonificação.");return '<div class="table-wrap"><table class="table"><thead><tr><th>Data</th><th>Operação</th><th>Ativo</th><th>Quantidade</th><th>Preço unitário</th><th>Taxas</th><th>Montante</th><th>Resultado realizado</th>'+(editable?'<th>Ações</th>':'')+'</tr></thead><tbody>'+items.map(item=>'<tr><td>'+dateLabel(item.date)+'</td><td><span class="op-tag '+(item.operation==="VENDA"?"sale":"buy")+'">'+esc(item.operation)+'</span></td><td><strong>'+esc(item.ticker)+'</strong></td><td>'+num(item.quantity)+'</td><td>'+money(item.unitPrice)+'</td><td>'+money(item.fees)+'</td><td><strong>'+money(Number(item.quantity)*Number(item.unitPrice)+Number(item.fees||0))+'</strong></td><td class="'+(Number(item.realizedResult||0)>=0?"positive":"negative")+'">'+(item.operation==="VENDA"?money(item.realizedResult||0):"—")+'</td>'+(editable?'<td>'+historyEditButton("transaction",item)+'</td>':'')+'</tr>').join("")+'</tbody></table></div>'}
   function evolutionChart(m){
     const currentMonth=new Date().toISOString().slice(0,7),data=(SEED.evolution||[]).filter(item=>item.month!==currentMonth).map(item=>({month:item.month,invested:Number(item.totalInvested||item.invested||0),value:Number(item.portfolioValue||0)}));data.push({month:currentMonth,invested:m.totalInvested,value:m.totalCurrent+m.totalIncome});data.sort((a,b)=>a.month.localeCompare(b.month));
     const width=760,height=270,pad=22,vals=data.flatMap(item=>[item.invested,item.value]),max=Math.max(...vals,1)*1.08,min=Math.min(...vals,0)*.92,range=max-min||1,xy=(item,index,key)=>[(index/Math.max(data.length-1,1))*(width-pad*2)+pad,height-pad-((item[key]-min)/range)*(height-pad*2)],points=(key)=>data.map((item,index)=>xy(item,index,key).join(",")).join(" "),now=points("value"),invested=points("invested"),last=xy(data[data.length-1],data.length-1,"value"),labels=[data[0],data[Math.floor((data.length-1)/2)],data[data.length-1]].filter(Boolean);
@@ -205,13 +210,13 @@ html[data-theme="dark"] .mobile-nav{border-color:var(--line);background:#182331f
   }
   function renderMoves(m){
     const needle=moveSearch.toLowerCase(),items=state.transactions.filter(item=>(moveFilter==="TODAS"||item.operation===moveFilter)&&(item.ticker+" "+item.operation+" "+item.date).toLowerCase().includes(needle)),buys=state.transactions.filter(item=>item.operation!=="VENDA").length,sales=state.transactions.filter(item=>item.operation==="VENDA").length,volume=state.transactions.reduce((sum,item)=>sum+Number(item.quantity)*Number(item.unitPrice),0);
-    return '<div class="page"><form class="filter-grid moves" data-form="move-search"><label class="field search-wide"><span>Busca rápida</span><input name="search" placeholder="Ativo, operação ou data" value="'+esc(moveSearch)+'"></label><label class="field"><span>Operação</span><select name="operation">'+["TODAS","COMPRA","VENDA","SUBSCRIÇÃO","BONIFICAÇÃO"].map(item=>'<option '+(item===moveFilter?"selected":"")+'>'+item+'</option>').join("")+'</select></label><button class="button secondary">⌕ Filtrar</button></form><section class="toolbar"><span class="offline-badge">✓ Custo médio ponderado ativo</span><div class="toolbar-actions"><button class="button secondary" data-action="open-b3">⇧ Importar B3</button><button class="button secondary" data-action="export-csv">⇩ Exportar CSV</button><button class="button primary" data-modal="transaction">＋ Nova movimentação</button></div></section><section class="kpis compact-kpis">'+kpi("↓","Compras registradas",String(buys),"Histórico importado e novos lançamentos")+kpi("↑","Vendas registradas",String(sales),"Resultado realizado: "+money(m.realized),m.realized>=0?"positive":"negative")+kpi("⇄","Volume movimentado",money(volume),"Compras, vendas e subscrições")+'</section><article class="panel"><div class="panel-head"><div><span class="eyebrow">HISTÓRICO COMPLETO</span><h2>Movimentações da carteira</h2></div><span class="chip">'+items.length+' registros</span></div>'+transactionTable(items)+'</article></div>';
+    return '<div class="page"><form class="filter-grid moves" data-form="move-search"><label class="field search-wide"><span>Busca rápida</span><input name="search" placeholder="Ativo, operação ou data" value="'+esc(moveSearch)+'"></label><label class="field"><span>Operação</span><select name="operation">'+["TODAS","COMPRA","VENDA","SUBSCRIÇÃO","BONIFICAÇÃO"].map(item=>'<option '+(item===moveFilter?"selected":"")+'>'+item+'</option>').join("")+'</select></label><button class="button secondary">⌕ Filtrar</button></form><section class="toolbar"><span class="offline-badge">✓ Custo médio ponderado ativo</span><div class="toolbar-actions"><button class="button secondary" data-action="open-b3">⇧ Importar B3</button><button class="button secondary" data-action="export-csv">⇩ Exportar CSV</button><button class="button primary" data-modal="transaction">＋ Nova movimentação</button></div></section><section class="kpis compact-kpis">'+kpi("↓","Compras registradas",String(buys),"Histórico importado e novos lançamentos")+kpi("↑","Vendas registradas",String(sales),"Resultado realizado: "+money(m.realized),m.realized>=0?"positive":"negative")+kpi("⇄","Volume movimentado",money(volume),"Compras, vendas e subscrições")+'</section><article class="panel"><div class="panel-head"><div><span class="eyebrow">HISTÓRICO COMPLETO</span><h2>Movimentações da carteira</h2></div><span class="chip">'+items.length+' registros</span></div>'+transactionTable(items,true)+'</article></div>';
   }
   function renderIncome(m){
     const tabs='<div class="tab-bar"><button data-income-tab="received" class="'+(incomeTab==="received"?"active":"")+'">Recebidos</button><button data-income-tab="future" class="'+(incomeTab==="future"?"active":"")+'">Futuros / declarados</button></div>';
-    if(incomeTab==="future"){const pending=state.futureIncome.filter(item=>!item.received),expected=pending.reduce((sum,item)=>sum+Number(item.total||0),0);return '<div class="page"><section class="toolbar">'+tabs+'<button class="button primary" data-modal="future-income">＋ Cadastrar provento futuro</button></section><section class="kpis compact-kpis">'+kpi("◷","A receber",money(expected),pending.length+" pagamentos previstos","positive")+kpi("▤","Eventos cadastrados",String(state.futureIncome.length),"Inclui pagos e pendentes")+kpi("⌁","Próximo pagamento",pending.length?dateLabel([...pending].sort((a,b)=>a.paymentDate.localeCompare(b.paymentDate))[0].paymentDate):"—","Baseado na data prevista")+'</section><article class="panel"><div class="panel-head"><div><span class="eyebrow">AGENDA DE PROVENTOS</span><h2>Dividendos e JCP declarados</h2></div></div>'+(state.futureIncome.length?state.futureIncome.sort((a,b)=>a.paymentDate.localeCompare(b.paymentDate)).map(item=>'<div class="future-card"><div><span class="status-tag '+(item.received?"paid":"")+'">'+(item.received?"Recebido":"Previsto")+'</span><h3>'+esc(item.ticker)+' · '+esc(item.type)+'</h3><p>Data com: '+dateLabel(item.exDate)+' · Pagamento: '+dateLabel(item.paymentDate)+' · '+num(item.referenceQuantity)+' cotas/ações × '+money(item.unitValue)+'</p></div><div class="future-money"><strong>'+money(item.total)+'</strong><small>'+(item.received?"Lançado nos recebidos":'<button class="text-button" data-action="mark-future-paid" data-id="'+esc(item.id)+'">Marcar como recebido</button>')+'</small></div></div>').join(""):empty("Nenhum provento futuro","Cadastre anúncios de dividendos, JCP ou rendimentos ainda não pagos."))+'</article></div>'}
+    if(incomeTab==="future"){const pending=state.futureIncome.filter(item=>!item.received),expected=pending.reduce((sum,item)=>sum+Number(item.total||0),0);return '<div class="page"><section class="toolbar">'+tabs+'<button class="button primary" data-modal="future-income">＋ Cadastrar provento futuro</button></section><section class="kpis compact-kpis">'+kpi("◷","A receber",money(expected),pending.length+" pagamentos previstos","positive")+kpi("▤","Eventos cadastrados",String(state.futureIncome.length),"Inclui pagos e pendentes")+kpi("⌁","Próximo pagamento",pending.length?dateLabel([...pending].sort((a,b)=>a.paymentDate.localeCompare(b.paymentDate))[0].paymentDate):"—","Baseado na data prevista")+'</section><article class="panel"><div class="panel-head"><div><span class="eyebrow">AGENDA DE PROVENTOS</span><h2>Dividendos e JCP declarados</h2></div></div>'+(state.futureIncome.length?state.futureIncome.sort((a,b)=>a.paymentDate.localeCompare(b.paymentDate)).map(item=>'<div class="future-card"><div><span class="status-tag '+(item.received?"paid":"")+'">'+(item.received?"Recebido":"Previsto")+'</span><h3>'+esc(item.ticker)+' · '+esc(item.type)+'</h3><p>Data com: '+dateLabel(item.exDate)+' · Pagamento: '+dateLabel(item.paymentDate)+' · '+num(item.referenceQuantity)+' cotas/ações × '+money(item.unitValue)+'</p></div><div class="future-money"><strong>'+money(item.total)+'</strong><small>'+(item.received?"Lançado nos recebidos":'<button class="text-button" data-action="mark-future-paid" data-id="'+esc(item.id)+'">Marcar como recebido</button> '+historyEditButton("future-income",item))+'</small></div></div>').join(""):empty("Nenhum provento futuro","Cadastre anúncios de dividendos, JCP ou rendimentos ainda não pagos."))+'</article></div>'}
     const monthly=state.income.reduce((acc,item)=>{const key=String(item.date).slice(0,7);acc[key]=(acc[key]||0)+Number(item.total||0);return acc},{}),months=Object.entries(monthly).sort((a,b)=>a[0].localeCompare(b[0])).slice(-12),max=Math.max(...months.map(item=>item[1]),1),payers=Object.entries(m.incomeByTicker).sort((a,b)=>b[1]-a[1]).slice(0,7);
-    return '<div class="page"><section class="toolbar">'+tabs+'<button class="button primary" data-modal="income">＋ Registrar provento</button></section><section class="kpis compact-kpis">'+kpi("●","Total recebido",money(m.totalIncome),"Todo o período",m.totalIncome>0?"positive":"")+kpi("▥","Média por pagamento",money(state.income.length?m.totalIncome/state.income.length:0),state.income.length+" pagamentos")+kpi("↗","Yield on cost",pct(m.totalInvested?m.totalIncome/m.totalInvested:0),"Proventos sobre capital investido",m.totalIncome>0?"positive":"")+'</section><section class="grid primary-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">POR MÊS</span><h2>Fluxo de proventos</h2></div></div>'+(months.length?'<div class="bars">'+months.map(([month,value])=>{const h=Math.max(value/max*100,4);return '<div class="bar"><div class="bar-area"><span class="bar-value" style="--h:'+h+'%">'+money(value)+'</span><i style="height:'+h+'%"></i></div><small>'+esc(monthLabel(month))+'</small></div>'}).join("")+'</div>':empty("Sem série mensal","Registre proventos para acompanhar a evolução da renda."))+'</article><article class="panel"><div class="panel-head"><div><span class="eyebrow">POR ATIVO</span><h2>Maiores pagadores</h2></div></div><div class="income-ranking">'+payers.map(([ticker,value],index)=>'<div class="income-row"><span>0'+(index+1)+'</span><strong>'+esc(ticker)+'</strong><span class="income-track"><i style="width:'+(m.totalIncome?value/m.totalIncome*100:0)+'%"></i></span><em>'+money(value)+'</em></div>').join("")+'</div></article></section><article class="panel"><div class="panel-head"><div><span class="eyebrow">PAGAMENTOS</span><h2>Histórico de proventos</h2></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Data</th><th>Ativo</th><th>Tipo</th><th>Valor unitário</th><th>Valor total</th></tr></thead><tbody>'+state.income.map(item=>'<tr><td>'+dateLabel(item.date)+'</td><td><strong>'+esc(item.ticker)+'</strong></td><td><span class="type-tag">'+esc(item.type)+'</span></td><td>'+money(item.unitValue)+'</td><td><strong class="positive">'+money(item.total)+'</strong></td></tr>').join("")+'</tbody></table></div>'+(state.income.length?"":empty("Nenhum provento registrado","Adicione dividendos, JCP, rendimentos de FII ou aluguéis."))+'</article></div>';
+    return '<div class="page"><section class="toolbar">'+tabs+'<button class="button primary" data-modal="income">＋ Registrar provento</button></section><section class="kpis compact-kpis">'+kpi("●","Total recebido",money(m.totalIncome),"Todo o período",m.totalIncome>0?"positive":"")+kpi("▥","Média por pagamento",money(state.income.length?m.totalIncome/state.income.length:0),state.income.length+" pagamentos")+kpi("↗","Yield on cost",pct(m.totalInvested?m.totalIncome/m.totalInvested:0),"Proventos sobre capital investido",m.totalIncome>0?"positive":"")+'</section><section class="grid primary-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">POR MÊS</span><h2>Fluxo de proventos</h2></div></div>'+(months.length?'<div class="bars">'+months.map(([month,value])=>{const h=Math.max(value/max*100,4);return '<div class="bar"><div class="bar-area"><span class="bar-value" style="--h:'+h+'%">'+money(value)+'</span><i style="height:'+h+'%"></i></div><small>'+esc(monthLabel(month))+'</small></div>'}).join("")+'</div>':empty("Sem série mensal","Registre proventos para acompanhar a evolução da renda."))+'</article><article class="panel"><div class="panel-head"><div><span class="eyebrow">POR ATIVO</span><h2>Maiores pagadores</h2></div></div><div class="income-ranking">'+payers.map(([ticker,value],index)=>'<div class="income-row"><span>0'+(index+1)+'</span><strong>'+esc(ticker)+'</strong><span class="income-track"><i style="width:'+(m.totalIncome?value/m.totalIncome*100:0)+'%"></i></span><em>'+money(value)+'</em></div>').join("")+'</div></article></section><article class="panel"><div class="panel-head"><div><span class="eyebrow">PAGAMENTOS</span><h2>Histórico de proventos</h2></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Data</th><th>Ativo</th><th>Tipo</th><th>Valor unitário</th><th>Valor total</th><th>Ações</th></tr></thead><tbody>'+state.income.map(item=>'<tr><td>'+dateLabel(item.date)+'</td><td><strong>'+esc(item.ticker)+'</strong></td><td><span class="type-tag">'+esc(item.type)+'</span></td><td>'+money(item.unitValue)+'</td><td><strong class="positive">'+money(item.total)+'</strong></td><td>'+historyEditButton("income",item)+'</td></tr>').join("")+'</tbody></table></div>'+(state.income.length?"":empty("Nenhum provento registrado","Adicione dividendos, JCP, rendimentos de FII ou aluguéis."))+'</article></div>';
   }
   function goalData(m){const current=groupBreakdown(m.rows,"type"),currentMap=Object.fromEntries(current),types=[...new Set([...Object.keys(state.goals),...current.map(item=>item[0])])];return types.map(type=>({type,target:Number(state.goals[type]||0),currentValue:Number(currentMap[type]||0),currentPct:m.totalCurrent?Number(currentMap[type]||0)/m.totalCurrent*100:0}))}
   function recommendations(m){const contribution=Math.max(0,Number(state.settings.monthlyContribution||0)),projected=m.totalCurrent+contribution,rows=goalData(m).map(item=>({...item,need:Math.max(0,item.target/100*projected-item.currentValue)})),sum=rows.reduce((s,i)=>s+i.need,0);if(!contribution)return[];if(sum<=0){const candidate=[...rows].sort((a,b)=>(a.currentPct-a.target)-(b.currentPct-b.target))[0];return candidate?[{type:candidate.type,amount:contribution,target:candidate.target,currentPct:candidate.currentPct}]:[]}return rows.filter(i=>i.need>0).map(i=>({type:i.type,amount:contribution*i.need/sum,target:i.target,currentPct:i.currentPct})).sort((a,b)=>b.amount-a.amount)}
@@ -227,6 +232,35 @@ html[data-theme="dark"] .mobile-nav{border-color:var(--line);background:#182331f
   function friendlyAuthError(error){const text=String(error?.message||"");if(/invalid login credentials/i.test(text))return"E-mail ou senha incorretos.";if(/email not confirmed/i.test(text))return"Confirme o e-mail enviado pelo Supabase antes de entrar.";if(/user already registered/i.test(text))return"Este e-mail já possui uma conta. Use o botão Entrar.";if(/password/i.test(text)&&/least|characters|weak/i.test(text))return"A senha precisa ter pelo menos 6 caracteres.";if(/rate limit|too many/i.test(text))return"Muitas tentativas. Aguarde alguns minutos e tente novamente.";return text||"Não foi possível concluir a autenticação."}
   async function handleAuth(form){if(form.dataset.sending==="true")return;if(!dbClient){showFormError(form,"A conexão não carregou. Atualize a página.");return}if(!navigator.onLine){showFormError(form,"Conecte-se à internet para abrir sua carteira.");return}if(!form.reportValidity())return;const email=String(new FormData(form).get("email")||"").trim().toLowerCase();if(!email)return;const button=form.querySelector("button.primary");form.querySelector(".validation-error")?.remove();form.dataset.sending="true";button.disabled=true;button.textContent="Entrando…";try{await activateUser({email})}catch(error){const message=String(error?.message||"");showFormError(form,error.code==="42501"?"E-mail não autorizado. Confira o endereço informado.":/carteira360_direct_load|schema cache|function.*not found/i.test(message)?"Falta executar o script de configuração no Supabase.":/fetch|network/i.test(message)?"Não foi possível conectar ao servidor. Confira a internet e se o projeto está ativo.":"Não foi possível abrir a carteira. Nenhum dado do servidor foi alterado.")}finally{form.dataset.sending="false";button.disabled=false;button.textContent="Entrar"}}
   async function signOut(){if(syncInFlight){toast("Aguarde a sincronização terminar antes de sair.","error");return}if(currentUser&&directMeta(currentUser.id)?.dirty){await syncState();if(directMeta(currentUser.id)?.dirty){toast("Há alterações locais pendentes. Exporte um backup antes de sair.","error");return}}closeModal();signedOutState()}
+  function openHistoryEditor(kind,id){
+    const item=historyRecords(kind).find(record=>String(record.id)===id);
+    if(!item)return;
+    openModal(kind);
+    const form=$('form[data-form="'+kind+'"]');
+    form.dataset.editId=id;
+    const title=kind==="transaction"?"Editar movimentação":kind==="income"?"Editar provento recebido":"Editar provento futuro";
+    const dialog=form.closest(".modal");
+    dialog.setAttribute("aria-label",title);
+    $(".modal-head h2",dialog).textContent=title;
+    $(".modal-actions .primary",form).textContent="✓ Salvar alterações";
+    if(kind==="transaction"){
+      $(".modal-head p",dialog).textContent="Ao salvar, a posição e os resultados das vendas ligadas ao ativo serão recalculados.";
+      form.elements.namedItem("unitPrice").min="0";
+    }
+    if(kind==="income"){
+      $(".form-grid",form).insertAdjacentHTML("beforeend",'<label class="field"><span>Valor unitário</span><input name="unitValue" type="number" min="0" step="any" required></label>');
+    }
+    for(const field of form.elements){
+      if(!field.name)continue;
+      const value=item[field.name]??(field.type==="number"?0:"");
+      if(field.tagName==="SELECT"&&!Array.from(field.options).some(option=>option.value===String(value))){
+        field.add(new Option(value,value));
+      }
+      field.value=value;
+      if(field.type==="number")field.step="any";
+      if(field.type==="date"&&!field.value){field.required=false;field.title="Data original: "+value}
+    }
+  }
   function openModal(name, assetId){
     const options=state.assets.map(item=>'<option>'+esc(item.ticker)+'</option>').join("");
     if(name==="account"){if(!currentUser){showAuthModal();return}modalShell("Conta e sincronização","Gerencie a sessão conectada ao Supabase.",'<div class="account-card"><span><strong>'+esc(currentUser.email||"Usuário conectado")+'</strong><small>Identificador da carteira: '+esc(currentUser.id.slice(0,8))+'…</small></span><span><strong>Sincronização automática ativa</strong><small>As alterações também continuam salvas neste dispositivo.</small></span></div><footer class="modal-actions"><button class="button secondary" data-action="sync-now">↻ Sincronizar agora</button><button class="button danger" data-action="logout">Sair da conta</button></footer>');return}
@@ -260,8 +294,168 @@ html[data-theme="dark"] .mobile-nav{border-color:var(--line);background:#182331f
     if(name==="backup")modalShell("Dados, nuvem e instalação","Faça backup, importe dados ou instale a versão PWA.",'<div class="backup-list"><button data-action="export-json"><span class="backup-icon">⇩</span><span><strong>Exportar backup JSON</strong><small>Baixar todos os dados do sistema</small></span><span>›</span></button><button data-action="cloud-share" class="cloud-button"><span class="backup-icon">☁</span><span><strong>Enviar ao Google Drive / Dropbox</strong><small>Usa o compartilhamento do celular ou baixa o arquivo no computador</small></span><span>›</span></button><button data-action="import-json"><span class="backup-icon">⇧</span><span><strong>Importar backup</strong><small>Restaurar um JSON do Carteira360</small></span><span>›</span></button><button data-action="open-b3"><span class="backup-icon">B3</span><span><strong>Importar extrato CSV da B3</strong><small>Compras e vendas em lote</small></span><span>›</span></button><button data-action="install-pwa"><span class="backup-icon">▣</span><span><strong>Instalar como aplicativo</strong><small>Disponível ao abrir o pacote por localhost ou hospedagem HTTPS</small></span><span>›</span></button><button data-action="reset"><span class="backup-icon">↺</span><span><strong>Restaurar planilha original</strong><small>Apaga somente as alterações feitas neste navegador</small></span><span>›</span></button></div><div class="backup-note">✓ Os dados ficam salvos automaticamente neste dispositivo. Exporte um backup antes de trocar de computador ou limpar o navegador.</div>');
   }
   function validateTransaction(input){if(!/^\d{4}-\d{2}-\d{2}$/.test(input.date)||Number.isNaN(new Date(input.date+"T12:00:00").getTime()))return"Informe uma data válida.";if(!Number.isFinite(input.quantity)||input.quantity<=0)return"A quantidade deve ser maior que zero.";if(!Number.isFinite(input.fees)||input.fees<0)return"As taxas não podem ser negativas.";if(input.operation!=="BONIFICAÇÃO"&&(!Number.isFinite(input.unitPrice)||input.unitPrice<=0))return"O preço unitário deve ser maior que zero.";const asset=state.assets.find(item=>item.ticker===input.ticker);if(!asset)return"Ativo não encontrado.";if(input.operation==="VENDA"&&input.quantity>Number(asset.quantity)+1e-8)return"A venda excede a quantidade disponível ("+num(asset.quantity)+").";return null}
-  function applyTransaction(input,options={}){const error=validateTransaction(input);if(error)return {ok:false,error};const asset=state.assets.find(item=>item.ticker===input.ticker),oldQty=Number(asset.quantity),oldAverage=Number(asset.averagePrice),oldCost=oldQty*oldAverage,tx={id:"tx-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),...input};if(input.operation==="VENDA"){asset.quantity=oldQty-input.quantity;tx.realizedResult=(input.unitPrice-oldAverage)*input.quantity-input.fees;const assetType=normalizeText(asset.type);state.sales.push({id:"sale-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),operationType:assetType.includes("cripto")?"VENDA DE CRIPTOMOEDA":assetType.includes("fii")?"VENDA DE FII":assetType.includes("bdr")?"VENDA DE BDR":assetType.includes("etf")?"VENDA DE ETF":"SWING TRADE DE AÇÃO",ticker:asset.ticker,name:asset.name,averagePrice:oldAverage,salePrice:input.unitPrice,quantity:input.quantity,fees:input.fees,netResult:tx.realizedResult,month:input.date,purchaseMonth:"",income:0})}else if(input.operation==="BONIFICAÇÃO"){asset.quantity=oldQty+input.quantity;asset.averagePrice=asset.quantity?oldCost/asset.quantity:0}else{asset.quantity=oldQty+input.quantity;asset.averagePrice=asset.quantity?(oldCost+input.quantity*input.unitPrice+input.fees)/asset.quantity:0}state.transactions.unshift(tx);if(!options.defer){persist();render()}return {ok:true,transaction:tx}}
+  function applyTransaction(input,options={}){const error=validateTransaction(input);if(error)return {ok:false,error};const asset=state.assets.find(item=>item.ticker===input.ticker),oldQty=Number(asset.quantity),oldAverage=Number(asset.averagePrice),oldCost=oldQty*oldAverage,tx={id:"tx-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),...input};if(input.operation==="VENDA"){asset.quantity=oldQty-input.quantity;tx.realizedResult=(input.unitPrice-oldAverage)*input.quantity-input.fees;state.sales.push({id:"sale-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),transactionId:tx.id,operationType:saleOperationType(asset),ticker:asset.ticker,name:asset.name,averagePrice:oldAverage,salePrice:input.unitPrice,quantity:input.quantity,fees:input.fees,netResult:tx.realizedResult,month:input.date,purchaseMonth:"",income:0})}else if(input.operation==="BONIFICAÇÃO"){asset.quantity=oldQty+input.quantity;asset.averagePrice=asset.quantity?oldCost/asset.quantity:0}else{asset.quantity=oldQty+input.quantity;asset.averagePrice=asset.quantity?(oldCost+input.quantity*input.unitPrice+input.fees)/asset.quantity:0}state.transactions.unshift(tx);if(!options.defer){persist();render()}return {ok:true,transaction:tx}}
+  const movementOperations=["COMPRA","VENDA","SUBSCRIÇÃO","BONIFICAÇÃO"];
+  const positionTolerance=1e-8;
+  function historyDateKey(value){
+    const date=String(value||"");
+    const br=date.match(/^(\d{1,2})[\/;](\d{1,2})[\/;](\d{2}|\d{4})$/);
+    if(!br)return date;
+    return (br[3].length===2?"20"+br[3]:br[3])+"-"+br[2].padStart(2,"0")+"-"+br[1].padStart(2,"0");
+  }
+  function movementOrder(items,ticker){
+    return items.filter(item=>item.ticker===ticker).reverse().sort((a,b)=>historyDateKey(a.date).localeCompare(historyDateKey(b.date)));
+  }
+  function movementQuantity(item){
+    return (item.operation==="VENDA"?-1:1)*Number(item.quantity);
+  }
+  function replayPosition(items,quantity,cost){
+    const sales=new Map();
+    for(const item of items){
+      const change=movementQuantity(item);
+      if(item.operation==="VENDA"){
+        if(quantity+change < -positionTolerance)return null;
+        const averagePrice=quantity>0?cost/quantity:0;
+        sales.set(item.id,{averagePrice,netResult:(Number(item.unitPrice)-averagePrice)*-change-Number(item.fees||0)});
+        cost+=change*averagePrice;
+      }else if(item.operation!=="BONIFICAÇÃO"){
+        cost+=change*Number(item.unitPrice)+Number(item.fees||0);
+      }
+      quantity+=change;
+      if(Math.abs(quantity)<positionTolerance){quantity=0;cost=0}
+    }
+    return {quantity,cost,sales};
+  }
+  function linkedSale(sales,item){
+    const linked=sales.find(sale=>sale.transactionId===item.id);
+    if(linked)return linked;
+    return sales.find(sale=>!sale.transactionId&&sale.ticker===item.ticker&&sale.month===item.date&&
+      Number(sale.quantity)===Number(item.quantity)&&Number(sale.salePrice)===Number(item.unitPrice)&&
+      Number(sale.fees||0)===Number(item.fees||0)&&Math.abs(Number(sale.netResult)-Number(item.realizedResult))<0.005);
+  }
+  function saleOperationType(asset){
+    const type=normalizeText(asset.type);
+    if(type.includes("cripto"))return "VENDA DE CRIPTOMOEDA";
+    for(const category of ["FII","BDR","ETF"]){
+      if(type.includes(category.toLowerCase()))return "VENDA DE "+category;
+    }
+    return "SWING TRADE DE AÇÃO";
+  }
+  function editMovement(previous,input){
+    const replacement={...previous,...input};
+    delete replacement.realizedResult;
+    const transactions=state.transactions.map(item=>item===previous?replacement:item);
+    const sales=state.sales.map(item=>({...item}));
+    const saleLinks=new Map();
+    for(const item of state.transactions){
+      if(item.operation!=="VENDA")continue;
+      const sale=linkedSale(sales,item);
+      if(sale){
+        sale.transactionId=item.id;
+        saleLinks.set(item.id,sale);
+      }
+    }
+    const positions=[];
+    const changedTransactions=new Map([[replacement.id,replacement]]);
+    for(const ticker of new Set([previous.ticker,input.ticker])){
+      const asset=state.assets.find(item=>item.ticker===ticker);
+      if(!asset)return "O ativo "+ticker+" precisa estar cadastrado para atualizar a posição.";
+      const oldItems=movementOrder(state.transactions,ticker);
+      const newItems=movementOrder(transactions,ticker);
+      let accumulated=0,minimum=0;
+      for(const item of oldItems){
+        accumulated+=movementQuantity(item);
+        minimum=Math.min(minimum,accumulated);
+      }
+      const quantity=Number(asset.quantity);
+      const cost=quantity*Number(asset.averagePrice);
+      const openingQuantity=Math.max(0,quantity-accumulated,-minimum);
+      const withoutOpeningCost=replayPosition(oldItems,openingQuantity,0);
+      const withOpeningCost=replayPosition(oldItems,openingQuantity,1);
+      if(!withoutOpeningCost||!withOpeningCost)return "Não foi possível reconstruir a posição de "+ticker+".";
+      const remainingShare=withOpeningCost.cost-withoutOpeningCost.cost;
+      const openingCost=openingQuantity>0&&remainingShare>1e-10
+        ?Math.max(0,(cost-withoutOpeningCost.cost)/remainingShare)
+        :openingQuantity*Number(asset.averagePrice);
+      const before=replayPosition(oldItems,openingQuantity,openingCost);
+      const after=replayPosition(newItems,openingQuantity,openingCost);
+      if(!after)return "A alteração deixaria uma venda de "+ticker+" sem quantidade disponível na data da operação.";
+      const newQuantity=quantity+after.quantity-before.quantity;
+      const newCost=cost+after.cost-before.cost;
+      if(!Number.isFinite(newQuantity)||!Number.isFinite(newCost)||newQuantity < -positionTolerance||(newQuantity>positionTolerance&&newCost < -positionTolerance)){
+        return "A alteração deixaria a posição de "+ticker+" com quantidade ou custo negativo.";
+      }
+      positions.push({asset,quantity:Math.abs(newQuantity)<positionTolerance?0:newQuantity,
+        averagePrice:newQuantity>positionTolerance?Math.max(0,newCost)/newQuantity:Number(asset.averagePrice)});
+      for(const item of newItems){
+        if(item.operation!=="VENDA")continue;
+        const sale=saleLinks.get(item.id);
+        if(item!==replacement&&!sale&&item.realizedResult==null)continue;
+        const result=after.sales.get(item.id);
+        const original=before.sales.get(item.id);
+        const historicalAverage=sale?.averagePrice??(original&&item.realizedResult!=null
+          ?Number(item.unitPrice)-(Number(item.realizedResult)+Number(item.fees||0))/Number(item.quantity):null);
+        const averagePrice=historicalAverage!=null&&original?Math.max(0,Number(historicalAverage)+result.averagePrice-original.averagePrice):result.averagePrice;
+        const netResult=(Number(item.unitPrice)-averagePrice)*Number(item.quantity)-Number(item.fees||0);
+        changedTransactions.set(item.id,{...item,realizedResult:netResult});
+        if(sale||item===replacement){
+          const record=sale||{id:"sale-"+item.id,purchaseMonth:"",income:0};
+          if(!sale)sales.push(record);
+          Object.assign(record,{transactionId:item.id,ticker:item.ticker,name:asset.name,averagePrice,
+            operationType:sale&&sale.ticker===item.ticker?sale.operationType:saleOperationType(asset),
+            salePrice:Number(item.unitPrice),quantity:Number(item.quantity),fees:Number(item.fees||0),netResult,month:item.date});
+        }
+      }
+    }
+    for(const position of positions){
+      position.asset.quantity=position.quantity;
+      position.asset.averagePrice=position.averagePrice;
+    }
+    state.transactions=transactions.map(item=>changedTransactions.get(item.id)||item);
+    state.sales=replacement.operation==="VENDA"?sales:sales.filter(sale=>sale.transactionId!==previous.id);
+    return null;
+  }
+  function saveHistoryEdit(form,data,kind){
+    const item=historyRecords(kind).find(record=>String(record.id)===form.dataset.editId);
+    if(!item){showFormError(form,"Registro não encontrado.");return}
+    const ticker=String(data.get("ticker"));
+    const date=String(data.get("date")||item.date||"");
+    const type=String(data.get("type")||"");
+    if(ticker!==item.ticker&&!state.assets.some(asset=>asset.ticker===ticker)){
+      showFormError(form,"Selecione um ativo da carteira.");return
+    }
+    if(kind==="transaction"){
+      const input={ticker,date,operation:String(data.get("operation")),quantity:Number(data.get("quantity")),
+        unitPrice:Number(data.get("unitPrice")),fees:Number(data.get("fees")||0)};
+      if(!date||!movementOperations.includes(input.operation)||![input.quantity,input.unitPrice,input.fees].every(Number.isFinite)||
+        input.quantity<=0||input.unitPrice<0||input.fees<0||
+        (input.unitPrice===0&&input.operation!=="BONIFICAÇÃO"&&Number(item.unitPrice)!==0)){
+        showFormError(form,"Confira a data, a operação, a quantidade, o preço e as taxas.");return
+      }
+      const error=editMovement(item,input);
+      if(error){showFormError(form,error);return}
+    }else if(kind==="income"){
+      const total=Number(data.get("total")),unitValue=Number(data.get("unitValue"));
+      if(!date||!Number.isFinite(total)||total<=0||!Number.isFinite(unitValue)||unitValue<0){
+        showFormError(form,"Confira a data e os valores do provento.");return
+      }
+      Object.assign(item,{ticker,date,type,total,unitValue});
+      const forecast=state.futureIncome.find(record=>record.incomeId===item.id);
+      if(forecast)Object.assign(forecast,{ticker,type,paymentDate:date,total,unitValue});
+    }else{
+      if(item.received){showFormError(form,"Edite este pagamento na aba Recebidos.");return}
+      const exDate=String(data.get("exDate")||""),paymentDate=String(data.get("paymentDate")||"");
+      const referenceQuantity=Number(data.get("referenceQuantity")),unitValue=Number(data.get("unitValue"));
+      const total=referenceQuantity*unitValue;
+      if(!exDate||!paymentDate||paymentDate<exDate||referenceQuantity<=0||unitValue<=0||!Number.isFinite(total)){
+        showFormError(form,"Confira as datas, a quantidade e o valor por unidade.");return
+      }
+      Object.assign(item,{ticker,type,exDate,paymentDate,referenceQuantity,unitValue,total});
+    }
+    persist();closeModal();render();toast("Alterações salvas.");
+  }
   function submitForm(form){const data=new FormData(form),kind=form.dataset.form;
+    if(form.dataset.editId!==undefined){saveHistoryEdit(form,data,kind);return}
     if(kind==="auth"){handleAuth(form,"login");return}
     if(kind==="asset-search"){assetSearch=String(data.get("search")||"").trim();typeFilter=String(data.get("type")||"Todos");sectorFilter=String(data.get("sector")||"Todos");render();return}
     if(kind==="move-search"){moveSearch=String(data.get("search")||"").trim();moveFilter=String(data.get("operation")||"TODAS");render();return}
@@ -371,10 +565,11 @@ html[data-theme="dark"] .mobile-nav{border-color:var(--line);background:#182331f
     if(action==="import-json")$("#import-file").click();
     if(action==="open-b3"){closeModal();$("#b3-file").click()}
     if(action==="import-b3-confirm")confirmB3Import();
+    if(action==="edit-history")openHistoryEditor(actionButton.dataset.kind,actionButton.dataset.id);
     if(action==="edit-asset")openModal("asset",actionButton.dataset.id);
     if(action==="delete-asset")deleteAsset(actionButton.dataset.id);
     if(action==="delete-all-assets")deleteAllAssets();
-    if(action==="mark-future-paid"){const item=state.futureIncome.find(x=>x.id===actionButton.dataset.id);if(item&&!item.received){item.received=true;state.income.unshift({id:"income-"+Date.now(),ticker:item.ticker,type:item.type,date:item.paymentDate,total:item.total,unitValue:item.unitValue});persist();render();toast("Provento movido para recebidos.")}}
+    if(action==="mark-future-paid"){const item=state.futureIncome.find(x=>x.id===actionButton.dataset.id);if(item&&!item.received){item.received=true;item.incomeId="income-"+Date.now();state.income.unshift({id:item.incomeId,ticker:item.ticker,type:item.type,date:item.paymentDate,total:item.total,unitValue:item.unitValue});persist();render();toast("Provento movido para recebidos.")}}
     if(action==="reset"&&confirm("Restaurar os dados originais da planilha?")){state=initial();persist();closeModal();render();toast("Dados originais restaurados.")}
     if(action==="print")window.print();
     if(action==="install-pwa"){if(installPrompt){installPrompt.prompt();installPrompt.userChoice.finally(()=>{installPrompt=null})}else toast("Para instalar, abra o pacote por localhost ou publique os arquivos em HTTPS.","error")}
